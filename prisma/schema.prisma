@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  phone         String    @unique
+  passwordHash  String    @map("password_hash")
+  role          String    @default("BUYER")
+  fullName      String    @map("full_name")
+  avatarUrl     String?   @map("avatar_url")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  shop          Shop?
+  orders        Order[]   @relation("BuyerOrders")
+
+  @@map("users")
+}
+
+model Shop {
+  id              String    @id @default(uuid())
+  sellerId        String    @unique @map("seller_id")
+  name            String
+  tier            String    // TIER_1 or TIER_2
+  gstNumber       String?   @map("gst_number")
+  address         String
+  city            String
+  state           String
+  pincode         String
+  latitude        Float
+  longitude       Float
+  phone           String
+  email           String?
+  isVerified      Boolean   @default(false) @map("is_verified")
+  isActive        Boolean   @default(true) @map("is_active")
+  documentUrls    String?   @map("document_urls") // JSON stringified
+  operatingHours  String?   @map("operating_hours") // JSON stringified
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  seller          User      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  inventory       Inventory[]
+  orders          Order[]
+
+  @@index([latitude, longitude])
+  @@map("shops")
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  parentId    String?   @map("parent_id")
+  attributes  String?   // JSON stringified
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  parent      Category? @relation("CategoryParent", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryParent")
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id              String    @id @default(uuid())
+  name            String
+  slug            String    @unique
+  categoryId      String    @map("category_id")
+  brand           String?
+  modelNumber     String?   @map("model_number")
+  description     String?   @db.Text
+  specifications  String?   @db.Text
+  baseMrp         Float?    @map("base_mrp")
+  images          String?   @db.Text
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  category        Category  @relation(fields: [categoryId], references: [id])
+  inventory       Inventory[]
+
+  @@index([categoryId])
+  @@index([slug])
+  @@map("products")
+}
+
+model Inventory {
+  id              String    @id @default(uuid())
+  shopId          String    @map("shop_id")
+  productId       String    @map("product_id")
+  variantData     String?   @map("variant_data") // JSON stringified
+  mrp             Float
+  sellingPrice    Float     @map("selling_price")
+  stockQuantity   Int       @default(0) @map("stock_quantity")
+  isAvailable     Boolean   @default(true) @map("is_available")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orders          Order[]
+
+  @@unique([shopId, productId, variantData])
+  @@index([shopId])
+  @@index([productId])
+  @@index([isAvailable])
+  @@map("inventory")
+}
+
+model Order {
+  id                String    @id @default(uuid())
+  orderNumber       String    @unique @map("order_number")
+  buyerId           String    @map("buyer_id")
+  shopId            String    @map("shop_id")
+  inventoryId       String    @map("inventory_id")
+  status            String    @default("PENDING") // PENDING, CONFIRMED, READY, OUT_FOR_DELIVERY, COMPLETED, CANCELLED
+  fulfillmentType   String    @map("fulfillment_type") // STORE_PICKUP, HOME_DELIVERY
+  pickupToken       String?   @map("pickup_token")
+  deliveryAddress   String?   @map("delivery_address") // JSON stringified
+  items             String    // JSON stringified
+  subtotal          Float
+  taxAmount         Float     @map("tax_amount")
+  deliveryFee       Float?    @map("delivery_fee")
+  totalAmount       Float     @map("total_amount")
+  paymentStatus     String    @default("PENDING") @map("payment_status") // PENDING, PAID, FAILED, REFUNDED
+  paymentMethod     String?   @map("payment_method")
+  razorpayOrderId   String?   @map("razorpay_order_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  buyer             User      @relation("BuyerOrders", fields: [buyerId], references: [id])
+  shop              Shop      @relation(fields: [shopId], references: [id])
+  inventory         Inventory @relation(fields: [inventoryId], references: [id])
+
+  @@index([buyerId])
+  @@index([shopId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
